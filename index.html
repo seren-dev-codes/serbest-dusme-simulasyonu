@@ -357,7 +357,7 @@
       background: #0f1724;
       border: 1px solid rgba(251, 191, 36, 0.35);
       border-radius: 12px;
-      padding: 10px 12px;
+      padding: 12px 14px 14px;
       flex: 0 0 auto;
       min-width: 0;
       max-width: 100%;
@@ -366,18 +366,95 @@
     .solution.open {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.75rem;
     }
-    .solution h3 { color: var(--warn); font-size: 0.84rem; margin: 0; }
+    .solution > h3 {
+      color: var(--warn);
+      font-size: 0.95rem;
+      margin: 0;
+      letter-spacing: 0.02em;
+    }
     .solution .steps {
-      font-size: 0.84rem;
-      line-height: 1.55;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      font-size: 0.9rem;
+      line-height: 1.65;
       color: #d5deeb;
       min-width: 0;
     }
+    .sol-card {
+      background: rgba(8, 14, 24, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .sol-card h4 {
+      margin: 0 0 8px;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--warn);
+    }
+    .sol-formula {
+      background: rgba(125, 211, 252, 0.08);
+      border: 1px solid rgba(125, 211, 252, 0.28);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+    }
+    .sol-formula .name {
+      display: block;
+      font-weight: 700;
+      color: var(--text);
+      font-size: 0.88rem;
+      margin-bottom: 4px;
+    }
+    .sol-formula .sym {
+      display: block;
+      color: var(--blue);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+    .sol-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin: 0;
+      padding: 2px 0 2px 12px;
+      border-left: 2px solid rgba(94, 234, 212, 0.38);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.86rem;
+      line-height: 1.7;
+      color: #c9d6e8;
+    }
+    .sol-steps .ok { color: var(--accent); font-weight: 700; }
+    .unit {
+      display: inline-block;
+      font-weight: 800;
+      color: var(--accent);
+      padding: 0 3px;
+    }
+    .sol-note {
+      background: rgba(94, 234, 212, 0.08);
+      border: 1px solid rgba(94, 234, 212, 0.22);
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-size: 0.84rem;
+      line-height: 1.6;
+      color: #c5d4e8;
+    }
+    .sol-given {
+      display: grid;
+      gap: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .sol-given span { color: var(--muted); }
     .solution code { color: var(--blue); font-family: Consolas, "Courier New", monospace; }
     .solution .ok { color: var(--accent); font-weight: 700; }
-    .solution .note { color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+    .solution .note { color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
 
     .graphs {
       display: grid;
@@ -818,50 +895,125 @@
       });
     }
 
+    function u(text) {
+      return "<span class=\"unit\">" + text + "</span>";
+    }
+
+    function formulaBlock(title, symbol, steps) {
+      const lines = steps.map(function (s) { return "<div>" + s + "</div>"; }).join("");
+      return (
+        "<div class=\"sol-card\">" +
+          "<div class=\"sol-formula\">" +
+            "<span class=\"name\">" + title + "</span>" +
+            "<span class=\"sym\">" + symbol + "</span>" +
+          "</div>" +
+          "<div class=\"sol-steps\">" + lines + "</div>" +
+        "</div>"
+      );
+    }
+
     function showSolution(reason) {
       const g = state.g, t = state.t, h0 = state.h0;
       let html = "";
-      html += "<div><b>Verilenler</b><br>";
-      html += "g = <code>" + fmt(g, 1) + " m/s²</code> · h₀ = <code>" + fmt(h0, 1) + " m</code><br>";
-      html += "m₁ = <code>" + state.bodies[0].mass + " kg</code>";
-      if (state.dual) html += " · m₂ = <code>" + state.bodies[1].mass + " kg</code>";
-      html += "<br>";
-      html += "t = <code>" + fmt(t, 2) + " s</code> · ortam: <code>" + (state.air ? "hava direnci" : "vakum") + "</code></div><br>";
+
+      html += "<div class=\"sol-card\"><h4>Verilenler</h4><div class=\"sol-given\">";
+      html += "<div>g = <code>" + fmt(g, 1) + "</code> " + u("m/s²") + "</div>";
+      html += "<div>h₀ = <code>" + fmt(h0, 1) + "</code> " + u("m") + "</div>";
+      html += "<div>m₁ = <code>" + state.bodies[0].mass + "</code> " + u("kg") + "</div>";
+      if (state.dual) html += "<div>m₂ = <code>" + state.bodies[1].mass + "</code> " + u("kg") + "</div>";
+      html += "<div>t = <code>" + fmt(t, 2) + "</code> " + u("s") + "</div>";
+      html += "<div>ortam = <code>" + (state.air ? "hava direnci var" : "vakum (havasız)") + "</code></div>";
+      html += "</div></div>";
 
       if (!state.air) {
         const t2 = t * t;
-        const x = 0.5 * g * t2;
-        html += "<div><b>Vakum: kütle denklemde yoktur</b><br>";
-        html += "<code>a = g</code> (m sadeleşir)<br>";
-        html += "<code>v = g · t = " + fmt(g, 1) + " · " + fmt(t, 2) + " = " + fmt(g * t, 2) + " m/s</code><br>";
-        html += "<code>y = y₀ + ½ g t²</code> (alınan yol, y₀ = 0)<br>";
-        html += "<code>y = ½ · " + fmt(g, 1) + " · (" + fmt(t, 2) + ")² = " + fmt(x, 2) + " m</code><br>";
-        html += "Kalan yükseklik: <code>h = h₀ − y = " + fmt(h0 - x, 2) + " m</code></div>";
+        const y = 0.5 * g * t2;
+        const v = g * t;
+        const h = Math.max(0, h0 - y);
+
+        html += "<div class=\"sol-note\"><b>Vakum notu:</b> Vakum ortamında kütle (m) hareket denklemine girmez; bu nedenle kütleden bağımsız olarak tüm cisimler aynı ivmeyle düşer.</div>";
+
+        html += formulaBlock(
+          "İvme Denklemi",
+          "a = g",
+          [
+            "a = " + fmt(g, 1) + " " + u("m/s²")
+          ]
+        );
+        html += formulaBlock(
+          "Hız Denklemi",
+          "v = g · t",
+          [
+            "v = " + fmt(g, 1) + " · " + fmt(t, 2),
+            "<span class=\"ok\">v = " + fmt(v, 2) + " " + u("m/s") + "</span>"
+          ]
+        );
+        html += formulaBlock(
+          "Alınan Yol / Yer Değiştirme",
+          "y = y₀ + ½ · g · t²",
+          [
+            "y₀ = 0 " + u("m") + " (bırakıldığı an alınan yol sıfır)",
+            "t² = (" + fmt(t, 2) + ")² = " + fmt(t2, 2) + " " + u("s²"),
+            "y = 0 + ½ · " + fmt(g, 1) + " · " + fmt(t2, 2),
+            "<span class=\"ok\">y = " + fmt(y, 2) + " " + u("m") + "</span>"
+          ]
+        );
+        html += formulaBlock(
+          "Kalan Yükseklik",
+          "h = h₀ − y",
+          [
+            "h = " + fmt(h0, 1) + " − " + fmt(y, 2),
+            "<span class=\"ok\">h = " + fmt(h, 2) + " " + u("m") + "</span>"
+          ]
+        );
+
         if (state.dual) {
-          html += "<div class='note'>İki cisim milisaniyesine kadar aynı hareketi yapar. Δt = 0.</div>";
+          html += "<div class=\"sol-note\">İki cisim de aynı a, v ve y değerlerine sahiptir. Δt = 0 " + u("s") + ".</div>";
         }
         if (reason === "land" || activeBodies().every((b) => b.landed)) {
-          html += "<div class='note'>Yere varış: t = √(2h₀/g) = <b>" + fmt(vacuumFallTime(), 2) + " s</b></div>";
+          html += "<div class=\"sol-note\">Cisim yere vardı.</div>";
         }
       } else {
-        html += "<div><b>Hava direnci</b><br>";
-        html += "<code>a = g − (½ · ρ · v² · Cd · A) / m</code><br>";
-        html += "ρ = " + ENV.RHO_AIR + " kg/m³ · Cd = " + ENV.CD + "</div><br>";
+        html += "<div class=\"sol-note\"><b>Hava notu:</b> Hava direncinde kütle (m) denklemde kalır. Aynı sürtünme kuvveti hafif cisimde daha büyük ivme kaybı üretir (F / m).</div>";
+
+        html += formulaBlock(
+          "Sürtünme Kuvveti",
+          "Fₛ = ½ · ρ · v² · Cd · A",
+          [
+            "ρ = " + ENV.RHO_AIR + " " + u("kg/m³") + " · Cd = " + ENV.CD
+          ]
+        );
+        html += formulaBlock(
+          "İvme Denklemi",
+          "a = g − (½ · ρ · v² · Cd · A) / m",
+          [
+            "a = g − Fₛ / m"
+          ]
+        );
+
         activeBodies().forEach((b) => {
           const drag = 0.5 * ENV.RHO_AIR * b.v * b.v * ENV.CD * b.A;
-          html += "<div><b>" + b.name + "</b> (m = " + b.mass + " kg, A = " + fmt(b.A, 4) + " m²)<br>";
-          html += "<code>a = " + fmt(g, 1) + " − (" + fmt(drag, 3) + ") / " + b.mass + " = " + fmt(b.a, 2) + " m/s²</code><br>";
-          html += "v = <span class='ok'>" + fmt(b.v, 2) + " m/s</span> · h = <span class='ok'>" + fmt(b.y, 2) + " m</span>";
-          if (b.tLand !== null) html += " · yere varış <b>" + fmt(b.tLand, 2) + " s</b>";
-          html += "</div><br>";
+          html += "<div class=\"sol-card\"><h4>" + b.name + "</h4>";
+          html += "<div class=\"sol-given\">";
+          html += "<div>m = <code>" + b.mass + "</code> " + u("kg") + "</div>";
+          html += "<div>A = <code>" + fmt(b.A, 4) + "</code> " + u("m²") + "</div>";
+          html += "</div>";
+          html += "<div class=\"sol-steps\" style=\"margin-top:8px\">";
+          html += "<div>Fₛ = ½ · " + ENV.RHO_AIR + " · (" + fmt(b.v, 2) + ")² · " + ENV.CD + " · " + fmt(b.A, 4) + "</div>";
+          html += "<div>Fₛ = " + fmt(drag, 3) + " " + u("N") + "</div>";
+          html += "<div>a = " + fmt(g, 1) + " − " + fmt(drag, 3) + " / " + b.mass + "</div>";
+          html += "<div><span class=\"ok\">a = " + fmt(b.a, 2) + " " + u("m/s²") + "</span></div>";
+          html += "<div><span class=\"ok\">v = " + fmt(b.v, 2) + " " + u("m/s") + "</span></div>";
+          html += "<div><span class=\"ok\">h = " + fmt(b.y, 2) + " " + u("m") + "</span></div>";
+          if (b.tLand !== null) {
+            html += "<div>yere varış: <span class=\"ok\">" + fmt(b.tLand, 2) + " " + u("s") + "</span></div>";
+          }
+          html += "</div></div>";
         });
-        html += "<div class='note'>" + (state.dual
-          ? "Aynı sürtünme kuvveti hafif cisimde daha büyük ivme kaybı üretir (F/m)."
-          : "Hava direnci kütleye bağlıdır: a = g − Fₛürtünme / m.") + "</div>";
       }
 
       if (reason === "target-miss") {
-        html += "<div class='note'>Hedef saniyeye ulaşılamadı: en az bir cisim daha önce yere vardı.</div>";
+        html += "<div class=\"sol-note\">Hedef saniyeye ulaşılamadı: en az bir cisim daha önce yere vardı.</div>";
       }
 
       solutionBody.innerHTML = html;
@@ -1170,15 +1322,17 @@
       ctx.restore();
 
       const series = [
-        { color: C1, key: "a", label: "Cisim 1" }
+        { color: C1, key: "a", dash: [], width: lineW + (state.dual ? 1.1 : 0) }
       ];
-      if (state.dual) series.push({ color: C2, key: "b", label: "Cisim 2" });
+      if (state.dual) series.push({ color: C2, key: "b", dash: [8, 5], width: lineW });
+      const marks = [];
       series.forEach((s) => {
         if (!state.history.length) return;
         ctx.save();
-        ctx.setLineDash([]);
+        ctx.setLineDash(s.dash);
+        ctx.lineCap = s.dash.length ? "round" : "butt";
         ctx.strokeStyle = s.color;
-        ctx.lineWidth = lineW;
+        ctx.lineWidth = s.width;
         if (state.history.length >= 2) {
           ctx.beginPath();
           state.history.forEach((p, i) => {
@@ -1192,21 +1346,40 @@
         const last = state.history[state.history.length - 1];
         const px = X(last.t);
         const py = Y(pick(last[s.key]));
-        // Anlık noktadan X ve Y eksenlerine kesikli yansıtma
-        ctx.setLineDash([5, 5]);
-        ctx.globalAlpha = 0.75;
-        ctx.lineWidth = large ? 1.8 : 1.15;
+        marks.push({ color: s.color, key: s.key, px, py });
+        // Anlık noktadan eksenlere noktalı uzantı (eğri düz/kesikli kalır)
+        ctx.setLineDash([1.5, 4.5]);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = large ? 2.2 : 1.5;
         ctx.beginPath();
         ctx.moveTo(pad.l, py);
         ctx.lineTo(px, py);
+        ctx.stroke();
+        ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(px, h - pad.b);
         ctx.stroke();
         ctx.restore();
-        ctx.fillStyle = s.color;
-        ctx.beginPath();
-        ctx.arc(px, py, dotR, 0, Math.PI * 2);
-        ctx.fill();
+      });
+
+      marks.forEach((m, i) => {
+        const other = marks.find((x) => x.key !== m.key);
+        const overlap = other && Math.hypot(other.px - m.px, other.py - m.py) < 2.5;
+        ctx.setLineDash([]);
+        if (m.key === "b" && overlap) {
+          ctx.strokeStyle = m.color;
+          ctx.lineWidth = large ? 2.8 : 2.1;
+          ctx.beginPath();
+          ctx.arc(m.px, m.py, dotR + 3.2, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = m.color;
+          ctx.beginPath();
+          ctx.arc(m.px, m.py, dotR, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
 
       ctx.font = large ? "16px Segoe UI" : "11px Segoe UI";
@@ -1215,7 +1388,7 @@
       ctx.fillText("● Cisim 1", pad.l + 8, pad.t - 6);
       if (state.dual) {
         ctx.fillStyle = C2;
-        ctx.fillText("● Cisim 2", pad.l + (large ? 120 : 86), pad.t - 6);
+        ctx.fillText("– – Cisim 2", pad.l + (large ? 120 : 86), pad.t - 6);
       }
     }
 
