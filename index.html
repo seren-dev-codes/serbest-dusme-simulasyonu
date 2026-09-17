@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Serbest Düşme Simülasyonu</title>
+  <style>
+    /* =========================================================
+       KOYU TEMA VE SINIF TAHTASI DÜZENİ
+       Sol: canvas  |  Sağ: kontroller + formül  |  Alt: 3 grafik
+       ========================================================= */
+    :root {
+      --bg: #0b1018;
+      --panel: #141c2b;
+      --soft: #1b2536;
+      --line: rgba(160, 184, 214, 0.18);
+      --text: #eef3fb;
+      --muted: #9aabC4;
+      --accent: #5eead4;
+      --blue: #7dd3fc;
+      --warn: #fbbf24;
+      --rose: #fb7185;
+      --ok: #34d399;
+      --c1: #5eead4;
+      --c2: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 8% -8%, rgba(94, 234, 212, 0.08), transparent 50%),
+        radial-gradient(800px 400px at 100% 0%, rgba(125, 211, 252, 0.07), transparent 46%),
+        var(--bg);
+      overflow: hidden;
+    }
+
+    .app {
+      height: 100%;
+      width: 100%;
+      margin: 0 auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    body.resizing { cursor: col-resize; user-select: none; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+      padding: 2px 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    header h1 { font-size: 1.32rem; letter-spacing: -0.02em; }
+    header p { color: var(--muted); font-size: 0.88rem; margin-top: 2px; }
+
+    .badge {
+      border: 1px solid var(--line);
+      background: rgba(94, 234, 212, 0.08);
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; margin-right: 6px; background: var(--rose);
+    }
+    .dot.run { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+    .dot.pause { background: var(--warn); }
+
+    .main {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.025), transparent 42%), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .card.graph-card { overflow: visible; }
+
+    .stage {
+      display: flex;
+      min-height: 0;
+      flex: 1 1 auto;
+      min-width: 240px;
+    }
+
+    .resizer {
+      flex: 0 0 10px;
+      margin: 0 3px;
+      border-radius: 99px;
+      background: rgba(160, 184, 214, 0.16);
+      cursor: col-resize;
+      touch-action: none;
+      position: relative;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+    .resizer::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 4px;
+      height: 42px;
+      transform: translate(-50%, -50%);
+      border-radius: 99px;
+      background: rgba(94, 234, 212, 0.55);
+    }
+    .resizer:hover,
+    body.resizing .resizer {
+      background: rgba(94, 234, 212, 0.28);
+      box-shadow: 0 0 12px rgba(94, 234, 212, 0.25);
+    }
+
+    #simCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+    #simCanvas.grabbing { cursor: grabbing; }
+
+    .panel {
+      --panel-w: 440px;
+      flex: 0 0 var(--panel-w);
+      width: var(--panel-w);
+      min-width: 280px;
+      min-height: 0;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-x: hidden;
+      overflow-y: auto;
+      position: relative;
+      container-type: inline-size;
+      container-name: sidepanel;
+    }
+
+    .card.panel {
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .panel > * {
+      position: static;
+      flex: 0 0 auto;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .panel-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      flex: 0 0 auto;
+      min-width: 0;
+      max-width: 100%;
+      position: static;
+      isolation: isolate;
+      overflow: visible;
+    }
+
+    h2 {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .pill {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      border: 1px solid rgba(94, 234, 212, 0.22);
+      background: rgba(94, 234, 212, 0.08);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.8rem;
+    }
+    .pill.c1 { color: var(--c1); border-color: rgba(94,234,212,0.3); background: rgba(94,234,212,0.08); }
+    .pill.c2 { color: var(--c2); border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.1); }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 99px;
+      background: #2a354b;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); border: 2px solid #042f2e; cursor: pointer;
+    }
+    #m1Slider::-webkit-slider-thumb { background: var(--c1); }
+    #m2Slider::-webkit-slider-thumb { background: var(--c2); border-color: #3b2204; }
+
+    .planets, .actions, .quick {
+      display: grid;
+      gap: 6px;
+    }
+    .planets { grid-template-columns: 1fr 1fr 1fr; }
+    .actions { grid-template-columns: 1fr 1fr 1fr; }
+    .quick { grid-template-columns: 1fr 1fr 1fr; }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      padding: 9px 6px;
+    }
+
+    .planet {
+      background: var(--soft);
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-weight: 600;
+    }
+    .planet small { display: block; color: var(--muted); font-weight: 500; font-size: 0.7rem; margin-top: 2px; }
+    .planet.active {
+      border-color: rgba(94, 234, 212, 0.55);
+      background: rgba(94, 234, 212, 0.12);
+    }
+
+    #btnStart { background: var(--accent); color: #042f2e; }
+    #btnPause { background: var(--warn); color: #422006; }
+    #btnReset { background: #334155; color: var(--text); }
+
+    .quick-btn {
+      background: #243044;
+      color: var(--blue);
+      border: 1px solid rgba(125, 211, 252, 0.28);
+      font-size: 0.78rem;
+    }
+    .quick-btn.active {
+      background: rgba(125, 211, 252, 0.16);
+      box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.4);
+    }
+
+    .hint { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      background: #0f1724;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 4px;
+    }
+    .seg button {
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 10px 8px;
+    }
+    .seg button.active-vac {
+      background: rgba(94, 234, 212, 0.16);
+      color: var(--accent);
+    }
+    .seg button.active-air {
+      background: rgba(251, 113, 133, 0.18);
+      color: var(--rose);
+    }
+
+    #btnDual {
+      background: rgba(245, 158, 11, 0.12);
+      color: var(--c2);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      border-radius: 999px;
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+    #btnDual.on {
+      background: rgba(245, 158, 11, 0.22);
+    }
+    .app.dual #btnDual { display: inline-flex; }
+
+    .dual-only { display: none; }
+    .app.dual .dual-only { display: flex; flex-direction: column; gap: 0.5rem; }
+    .app.dual .compare { grid-template-columns: 1fr 1fr; }
+    .app.dual .compare .dual-only { display: flex; }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .body-card {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+    }
+    .body-card h3 {
+      font-size: 0.78rem;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .body-card.c1 h3 { color: var(--c1); }
+    .body-card.c2 h3 { color: var(--c2); }
+    .kv { display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kv span { color: var(--muted); }
+
+    .clock {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .clock b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+
+    .solution {
+      display: none;
+      background: #0f1724;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      border-radius: 12px;
+      padding: 10px 12px;
+      flex: 0 0 auto;
+      min-width: 0;
+      max-width: 100%;
+      overflow: auto;
+    }
+    .solution.open {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .solution h3 { color: var(--warn); font-size: 0.84rem; margin: 0; }
+    .solution .steps {
+      font-size: 0.84rem;
+      line-height: 1.55;
+      color: #d5deeb;
+      min-width: 0;
+    }
+    .solution code { color: var(--blue); font-family: Consolas, "Courier New", monospace; }
+    .solution .ok { color: var(--accent); font-weight: 700; }
+    .solution .note { color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+
+    .graphs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      flex: 0 0 230px;
+    }
+
+    .graph-card {
+      padding: 8px 10px 8px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      cursor: pointer;
+      transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    }
+    .graph-card:hover {
+      border-color: rgba(94, 234, 212, 0.55);
+      box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.35), 0 0 28px rgba(94, 234, 212, 0.18);
+      transform: translateY(-1px);
+    }
+    .graph-card canvas { pointer-events: none; }
+    .graph-card h3 {
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .graph-card h3 span { color: var(--muted); font-size: 0.75rem; font-weight: 500; }
+    .graph-card canvas {
+      width: 100%;
+      height: 176px;
+      display: block;
+      background: #0a111c;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+    }
+
+    @container sidepanel (min-width: 520px) {
+      .solution .steps { font-size: 0.95rem; }
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.open { display: flex; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(5, 8, 14, 0.62); }
+    .modal-box {
+      position: relative;
+      z-index: 1;
+      width: 70vw;
+      height: 70vh;
+      max-width: 1280px;
+      max-height: 820px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%), var(--panel);
+      border: 1px solid rgba(94, 234, 212, 0.28);
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      padding: 14px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .modal-head h2 {
+      font-size: 1.15rem;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--text);
+    }
+    .modal-head h2 span { color: var(--muted); font-size: 0.92rem; font-weight: 500; margin-left: 8px; }
+    .modal-close {
+      background: #243044;
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 10px 16px;
+      font-size: 1rem;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .modal-close:hover { background: #fb7185; color: #2a0a10; border-color: transparent; }
+    #modalCanvas {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+      display: block;
+      background: #0a111c;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+    }
+
+    @media (max-width: 720px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; }
+      .main { flex-direction: column; }
+      .resizer { display: none; }
+      .panel { width: 100%; flex: none; --panel-w: 100%; }
+      .graphs { grid-template-columns: 1fr; flex: none; }
+      .stage { min-height: 420px; }
+      .modal-box { width: 92vw; height: 72vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Serbest Düşme Simülasyonu</h1>
+        <p>Lise fizik · Vakumda kütle ivmeyi değiştirmez (Galileo)</p>
+      </div>
+      <div class="header-actions">
+        <div class="badge" id="statusBadge"><span class="dot"></span>Hazır</div>
+        <button type="button" id="btnDual">Cisim 2 ekle</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <section class="card stage">
+        <canvas id="simCanvas"></canvas>
+      </section>
+
+      <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Panel genişliği"></div>
+
+      <aside class="card panel" id="sidePanel">
+        <div class="panel-block">
+          <h2>Ortam</h2>
+          <div class="seg" role="group" aria-label="Hava direnci">
+            <button type="button" id="btnVacuum" class="active-vac">Vakum (Hava Yok)</button>
+            <button type="button" id="btnAir">Hava Direnci Var</button>
+          </div>
+          <p class="hint" id="envHint">Vakum: a = g · kütle hareketi değiştirmez.</p>
+        </div>
+
+        <div class="panel-block">
+          <h2>Ayarlar</h2>
+          <div>
+            <div class="row">
+              <label for="heightSlider">Başlangıç Yüksekliği (h₀)</label>
+              <span class="pill" id="heightValue">45,0 m</span>
+            </div>
+            <input id="heightSlider" type="range" min="10" max="100" step="1" value="45" />
+          </div>
+
+          <div>
+            <div class="row">
+              <label for="gSlider">Yerçekimi ivmesi (g)</label>
+              <span class="pill" id="gValue">10,0 m/s²</span>
+            </div>
+            <input id="gSlider" type="range" min="1.6" max="20" step="0.1" value="10" />
+            <div class="planets" style="margin-top:6px">
+              <button class="planet active" type="button" data-g="10" data-planet="earth">Dünya<small>g = 10</small></button>
+              <button class="planet" type="button" data-g="1.6" data-planet="moon">Ay<small>g = 1.6</small></button>
+              <button class="planet" type="button" data-g="3.7" data-planet="mars">Mars<small>g = 3.7</small></button>
+            </div>
+          </div>
+
+          <div>
+            <div class="row">
+              <label for="m1Slider">Cisim 1 kütlesi (hafif)</label>
+              <span class="pill c1" id="m1Value">1 kg</span>
+            </div>
+            <input id="m1Slider" type="range" min="1" max="150" step="1" value="1" />
+          </div>
+          <div class="dual-only" id="m2Wrap">
+            <div class="row">
+              <label for="m2Slider">Cisim 2 kütlesi (ağır)</label>
+              <span class="pill c2" id="m2Value">100 kg</span>
+            </div>
+            <input id="m2Slider" type="range" min="1" max="150" step="1" value="100" />
+          </div>
+        </div>
+
+        <div class="panel-block">
+          <div class="actions">
+            <button id="btnStart" type="button">Başlat</button>
+            <button id="btnPause" type="button">Durdur</button>
+            <button id="btnReset" type="button">Sıfırla</button>
+          </div>
+        </div>
+
+        <div class="panel-block">
+          <h2>Hızlı saniye analizi</h2>
+          <div class="quick">
+            <button class="quick-btn" type="button" data-stop="1">1. s'de Durdur</button>
+            <button class="quick-btn" type="button" data-stop="2">2. s'de Durdur</button>
+            <button class="quick-btn" type="button" data-stop="3">3. s'de Durdur</button>
+          </div>
+        </div>
+
+        <div class="panel-block">
+          <h2>Canlı veriler</h2>
+          <div class="clock">
+            <span>Geçen süre (t)</span>
+            <b id="liveT">0,00 s</b>
+          </div>
+          <div class="compare">
+            <div class="body-card c1">
+              <h3>Cisim 1 <span id="liveM1">1 kg</span></h3>
+              <div class="kv"><span>Hız (v)</span><b id="v1">0,00 m/s</b></div>
+              <div class="kv"><span>Yükseklik (h)</span><b id="h1">45,00 m</b></div>
+              <div class="kv"><span>İvme (a)</span><b id="a1">10,0 m/s²</b></div>
+            </div>
+            <div class="body-card c2 dual-only">
+              <h3>Cisim 2 <span id="liveM2">100 kg</span></h3>
+              <div class="kv"><span>Hız (v)</span><b id="v2">0,00 m/s</b></div>
+              <div class="kv"><span>Yükseklik (h)</span><b id="h2">45,00 m</b></div>
+              <div class="kv"><span>İvme (a)</span><b id="a2">10,0 m/s²</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-block solution" id="solutionBox">
+          <h3>Formül &amp; Adım Adım Çözüm</h3>
+          <div class="steps" id="solutionBody"></div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="graphs">
+      <div class="card graph-card" data-graph="xt" title="Büyütmek için tıklayın">
+        <h3>Konum-Zaman (x-t) <span>tek cisim</span></h3>
+        <canvas id="xtCanvas"></canvas>
+      </div>
+      <div class="card graph-card" data-graph="vt" title="Büyütmek için tıklayın">
+        <h3>Hız-Zaman (v-t) <span>tek cisim</span></h3>
+        <canvas id="vtCanvas"></canvas>
+      </div>
+      <div class="card graph-card" data-graph="at" title="Büyütmek için tıklayın">
+        <h3>İvme-Zaman (a-t) <span>tek cisim</span></h3>
+        <canvas id="atCanvas"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal" id="graphModal" aria-hidden="true">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle">Grafik</h2>
+        <button type="button" class="modal-close" id="modalClose">Kapat (X)</button>
+      </div>
+      <canvas id="modalCanvas"></canvas>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       SERBEST DÜŞME — İKİ CİSİM KARŞILAŞTIRMASI
+       Aşağı yön pozitif:
+         Vakum:  a = g  (kütleden bağımsız)
+                  v = g·t
+                  y = y0 + ½·g·t²   (alınan yol)
+         Hava:   a = g − (½·ρ·v²·Cd·A) / m
+       ========================================================= */
+
+    const ENV = {
+      RHO_AIR: 1.225, // kg/m³  (deniz seviyesi hava)
+      CD: 0.47,       // küre sürtünme katsayısı
+      RHO_BODY: 800   // cisim yoğunluğu (kg/m³) — A'yı kütleden türetmek için
+    };
+
+    const C1 = "#5eead4";
+    const C2 = "#f59e0b";
+
+    // --- DOM ---
+    const simCanvas = document.getElementById("simCanvas");
+    const xtCanvas = document.getElementById("xtCanvas");
+    const vtCanvas = document.getElementById("vtCanvas");
+    const atCanvas = document.getElementById("atCanvas");
+    const modalCanvas = document.getElementById("modalCanvas");
+    const simCtx = simCanvas.getContext("2d");
+
+    const heightSlider = document.getElementById("heightSlider");
+    const gSlider = document.getElementById("gSlider");
+    const m1Slider = document.getElementById("m1Slider");
+    const m2Slider = document.getElementById("m2Slider");
+    const planetBtns = document.querySelectorAll(".planet");
+    const quickBtns = document.querySelectorAll(".quick-btn");
+    const sidePanel = document.getElementById("sidePanel");
+    const resizer = document.getElementById("resizer");
+    const graphModal = document.getElementById("graphModal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalClose = document.getElementById("modalClose");
+    const modalBackdrop = document.getElementById("modalBackdrop");
+    const solutionBox = document.getElementById("solutionBox");
+    const solutionBody = document.getElementById("solutionBody");
+    const statusBadge = document.getElementById("statusBadge");
+    const envHint = document.getElementById("envHint");
+
+    /* Kesit alanı: hafif cisim "sünger top" gibi geniş, ağır cisim yoğun gülle.
+       Böylece a = g − (½ρv²CdA)/m  sınıf tahtasında net ayrılır. */
+    function areaFromMass(m) {
+      return 0.18 / Math.pow(Math.max(m, 0.5), 0.45);
+    }
+
+    function makeBody(name, mass, color) {
+      return {
+        name: name,
+        mass: mass,
+        color: color,
+        A: areaFromMass(mass),
+        y: 45,       // kalan yükseklik (m)
+        v: 0,        // aşağı + (m/s)
+        a: 10,
+        x: 0,        // alınan yol (m)
+        landed: false,
+        tLand: null
+      };
+    }
+
+    const state = {
+      g: 10,
+      planet: "earth",
+      h0: 45,
+      t: 0,
+      air: false,          // false = vakum (varsayılan)
+      dual: false,         // Cisim 2 yalnızca kullanıcı eklerse görünür
+      running: false,
+      finished: false,
+      targetT: null,
+      dragging: false,
+      resizing: false,
+      modalGraph: null,
+      bodies: [
+        makeBody("Cisim 1", 1, C1),
+        makeBody("Cisim 2", 100, C2)
+      ],
+      history: []
+    };
+
+    let lastTs = 0;
+    let layout = null;
+
+    function fmt(n, d) {
+      return Number(n).toFixed(d).replace(".", ",");
+    }
+
+    function setStatus(text, mode) {
+      statusBadge.innerHTML = '<span class="dot ' + (mode || "") + '"></span>' + text;
+    }
+
+    function vacuumFallTime() {
+      return Math.sqrt((2 * state.h0) / state.g);
+    }
+
+    /* Vakumda lise formülü: kütle sadeleşir, iki cisim özdeş hareket eder. */
+    function vacuumAt(t) {
+      const tMax = vacuumFallTime();
+      const landed = t >= tMax - 1e-12;
+      const tau = landed ? tMax : Math.max(0, t);
+      const x = 0.5 * state.g * tau * tau; // y = y0 + ½ g t²  (y0=0, alınan yol)
+      return {
+        t: tau,
+        x: x,
+        y: Math.max(0, state.h0 - x),
+        v: state.g * tau,
+        a: landed ? 0 : state.g,
+        landed: landed
+      };
+    }
+
+    /* Hava direnci: a = g − (½ ρ v² Cd A) / m   (sürtünme hıza zıt, aşağı +) */
+    function accelWithAir(body, v) {
+      const speed = Math.abs(v);
+      const drag = 0.5 * ENV.RHO_AIR * speed * speed * ENV.CD * body.A;
+      return Math.max(0, state.g - drag / body.mass);
+    }
+
+    function activeBodies() {
+      return state.dual ? state.bodies : state.bodies.slice(0, 1);
+    }
+
+    function applyVacuumToBodies(kin) {
+      activeBodies().forEach((b) => {
+        b.x = kin.x;
+        b.y = kin.y;
+        b.v = kin.v;
+        b.a = kin.a;
+        b.landed = kin.landed;
+        if (kin.landed && b.tLand === null) b.tLand = kin.t;
+      });
+    }
+
+    function resetBodies() {
+      state.bodies.forEach((b) => {
+        b.A = areaFromMass(b.mass);
+        b.y = state.h0;
+        b.v = 0;
+        b.a = state.g;
+        b.x = 0;
+        b.landed = false;
+        b.tLand = null;
+      });
+    }
+
+    function snapshotPoint() {
+      const b0 = state.bodies[0], b1 = state.bodies[1];
+      return {
+        t: state.t,
+        a: { x: b0.x, v: b0.v, y: b0.y, a: b0.a },
+        b: { x: b1.x, v: b1.v, y: b1.y, a: b1.a }
+      };
+    }
+
+    function record() {
+      const last = state.history[state.history.length - 1];
+      if (!last || state.t - last.t >= 0.02 || state.finished) {
+        state.history.push(snapshotPoint());
+        if (state.history.length > 1500) state.history.shift();
+      }
+    }
+
+    function updateHud() {
+      document.getElementById("heightValue").textContent = fmt(state.h0, 1) + " m";
+      document.getElementById("gValue").textContent = fmt(state.g, 1) + " m/s²";
+      document.getElementById("m1Value").textContent = state.bodies[0].mass + " kg";
+      document.getElementById("m2Value").textContent = state.bodies[1].mass + " kg";
+      document.getElementById("liveM1").textContent = state.bodies[0].mass + " kg";
+      document.getElementById("liveM2").textContent = state.bodies[1].mass + " kg";
+      document.getElementById("liveT").textContent = fmt(state.t, 2) + " s";
+      const ids = [["v1", "h1", "a1"], ["v2", "h2", "a2"]];
+      state.bodies.forEach((b, i) => {
+        document.getElementById(ids[i][0]).textContent = fmt(b.v, 2) + " m/s";
+        document.getElementById(ids[i][1]).textContent = fmt(b.y, 2) + " m";
+        document.getElementById(ids[i][2]).textContent = fmt(b.a, 1) + " m/s²";
+      });
+    }
+
+    function showSolution(reason) {
+      const g = state.g, t = state.t, h0 = state.h0;
+      let html = "";
+      html += "<div><b>Verilenler</b><br>";
+      html += "g = <code>" + fmt(g, 1) + " m/s²</code> · h₀ = <code>" + fmt(h0, 1) + " m</code><br>";
+      html += "m₁ = <code>" + state.bodies[0].mass + " kg</code>";
+      if (state.dual) html += " · m₂ = <code>" + state.bodies[1].mass + " kg</code>";
+      html += "<br>";
+      html += "t = <code>" + fmt(t, 2) + " s</code> · ortam: <code>" + (state.air ? "hava direnci" : "vakum") + "</code></div><br>";
+
+      if (!state.air) {
+        const t2 = t * t;
+        const x = 0.5 * g * t2;
+        html += "<div><b>Vakum: kütle denklemde yoktur</b><br>";
+        html += "<code>a = g</code> (m sadeleşir)<br>";
+        html += "<code>v = g · t = " + fmt(g, 1) + " · " + fmt(t, 2) + " = " + fmt(g * t, 2) + " m/s</code><br>";
+        html += "<code>y = y₀ + ½ g t²</code> (alınan yol, y₀ = 0)<br>";
+        html += "<code>y = ½ · " + fmt(g, 1) + " · (" + fmt(t, 2) + ")² = " + fmt(x, 2) + " m</code><br>";
+        html += "Kalan yükseklik: <code>h = h₀ − y = " + fmt(h0 - x, 2) + " m</code></div>";
+        if (state.dual) {
+          html += "<div class='note'>İki cisim milisaniyesine kadar aynı hareketi yapar. Δt = 0.</div>";
+        }
+        if (reason === "land" || activeBodies().every((b) => b.landed)) {
+          html += "<div class='note'>Yere varış: t = √(2h₀/g) = <b>" + fmt(vacuumFallTime(), 2) + " s</b></div>";
+        }
+      } else {
+        html += "<div><b>Hava direnci</b><br>";
+        html += "<code>a = g − (½ · ρ · v² · Cd · A) / m</code><br>";
+        html += "ρ = " + ENV.RHO_AIR + " kg/m³ · Cd = " + ENV.CD + "</div><br>";
+        activeBodies().forEach((b) => {
+          const drag = 0.5 * ENV.RHO_AIR * b.v * b.v * ENV.CD * b.A;
+          html += "<div><b>" + b.name + "</b> (m = " + b.mass + " kg, A = " + fmt(b.A, 4) + " m²)<br>";
+          html += "<code>a = " + fmt(g, 1) + " − (" + fmt(drag, 3) + ") / " + b.mass + " = " + fmt(b.a, 2) + " m/s²</code><br>";
+          html += "v = <span class='ok'>" + fmt(b.v, 2) + " m/s</span> · h = <span class='ok'>" + fmt(b.y, 2) + " m</span>";
+          if (b.tLand !== null) html += " · yere varış <b>" + fmt(b.tLand, 2) + " s</b>";
+          html += "</div><br>";
+        });
+        html += "<div class='note'>" + (state.dual
+          ? "Aynı sürtünme kuvveti hafif cisimde daha büyük ivme kaybı üretir (F/m)."
+          : "Hava direnci kütleye bağlıdır: a = g − Fₛürtünme / m.") + "</div>";
+      }
+
+      if (reason === "target-miss") {
+        html += "<div class='note'>Hedef saniyeye ulaşılamadı: en az bir cisim daha önce yere vardı.</div>";
+      }
+
+      solutionBody.innerHTML = html;
+      solutionBox.classList.add("open");
+      solutionBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function hideSolution() {
+      solutionBox.classList.remove("open");
+    }
+
+    function resetSim(keepStatus) {
+      state.t = 0;
+      state.running = false;
+      state.finished = false;
+      state.targetT = null;
+      resetBodies();
+      state.history = [snapshotPoint()];
+      quickBtns.forEach((b) => b.classList.remove("active"));
+      hideSolution();
+      updateHud();
+      if (!keepStatus) setStatus("Hazır", "");
+    }
+
+    function pauseNow(text, reason) {
+      state.running = false;
+      record();
+      updateHud();
+      showSolution(reason);
+      setStatus(text, "pause");
+    }
+
+    /* Hava dirençli cisim: yarı-Euler, yere çarpınca durur. */
+    function stepBodyAir(body, dt) {
+      if (body.landed) {
+        body.v = 0;
+        body.a = 0;
+        body.y = 0;
+        body.x = state.h0;
+        return;
+      }
+      body.a = accelWithAir(body, body.v);
+      const vNew = body.v + body.a * dt;
+      const yNew = body.y - body.v * dt - 0.5 * body.a * dt * dt;
+      if (yNew <= 0) {
+        body.y = 0;
+        body.x = state.h0;
+        body.v = Math.max(0, body.v);
+        body.a = 0;
+        body.landed = true;
+        body.tLand = state.t;
+        return;
+      }
+      body.v = vNew;
+      body.y = yNew;
+      body.x = state.h0 - body.y;
+    }
+
+    function bothLanded() {
+      return activeBodies().every((b) => b.landed);
+    }
+
+    function stepPhysics(dt) {
+      if (!state.running || state.finished) return;
+
+      const next = state.t + dt;
+
+      if (!state.air) {
+        const tLand = vacuumFallTime();
+        if (state.targetT !== null && next >= state.targetT && state.targetT <= tLand + 1e-9) {
+          state.t = state.targetT;
+          applyVacuumToBodies(vacuumAt(state.t));
+          if (state.bodies[0].landed) state.finished = true;
+          pauseNow(state.targetT + ". saniyede durdu", state.bodies[0].landed ? "land" : "target");
+          return;
+        }
+        if (next >= tLand) {
+          state.t = tLand;
+          applyVacuumToBodies(vacuumAt(tLand));
+          state.finished = true;
+          state.running = false;
+          record();
+          updateHud();
+          const miss = state.targetT !== null && tLand < state.targetT - 1e-6;
+          showSolution(miss ? "target-miss" : "land");
+          setStatus(state.dual ? "İki cisim aynı anda yere vardı" : "Yere ulaştı", "");
+          return;
+        }
+        state.t = next;
+        applyVacuumToBodies(vacuumAt(state.t));
+        record();
+        updateHud();
+        return;
+      }
+
+      // Hava dirençli sayısal adım
+      if (state.targetT !== null && next >= state.targetT) {
+        const h = Math.max(0, state.targetT - state.t);
+        activeBodies().forEach((b) => stepBodyAir(b, h));
+        state.t = state.targetT;
+        pauseNow(state.targetT + ". saniyede durdu", "target");
+        return;
+      }
+
+      const sub = Math.max(1, Math.ceil(dt / 0.004));
+      const h = dt / sub;
+      for (let i = 0; i < sub; i++) {
+        state.t += h;
+        activeBodies().forEach((b) => stepBodyAir(b, h));
+        if (bothLanded()) break;
+      }
+      if (bothLanded()) {
+        state.finished = true;
+        state.running = false;
+        record();
+        updateHud();
+        showSolution("land");
+        if (state.dual) {
+          const dtLand = Math.abs((state.bodies[0].tLand || 0) - (state.bodies[1].tLand || 0));
+          setStatus("Karşılaştırma bitti · Δt = " + fmt(dtLand, 2) + " s", "");
+        } else {
+          setStatus("Yere ulaştı", "");
+        }
+        return;
+      }
+      record();
+      updateHud();
+    }
+
+    function prepare(canvas, ctx) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.floor(rect.width * dpr));
+      const h = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { w: rect.width, h: rect.height };
+    }
+
+    function theme() {
+      if (state.planet === "moon") {
+        return { sky0: "#07070c", sky1: "#1c1d27", ground: "#8b8fa0", ground2: "#4a4e5c", stars: true };
+      }
+      if (state.planet === "mars") {
+        return { sky0: "#140804", sky1: "#5a2414", ground: "#c45c32", ground2: "#7a2e16", stars: false };
+      }
+      return { sky0: "#07111f", sky1: "#163554", ground: "#4c8a5e", ground2: "#234632", stars: false };
+    }
+
+    /* Görsel yarıçap: hafif küçük, ağır büyük (kütle log ölçeği). */
+    function visualRadius(mass) {
+      const t = Math.log10(Math.max(mass, 1)) / Math.log10(150);
+      return 9 + 14 * Math.max(0, Math.min(1, t));
+    }
+
+    function drawBall(ctx, cx, by, r, color) {
+      const glow = ctx.createRadialGradient(cx, by, 2, cx, by, r * 2.2);
+      glow.addColorStop(0, "rgba(255,255,255,0.22)");
+      glow.addColorStop(1, "transparent");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(cx, by, r * 2.2, 0, Math.PI * 2); ctx.fill();
+      const grad = ctx.createRadialGradient(cx - r * 0.3, by - r * 0.35, 2, cx, by, r);
+      grad.addColorStop(0, "#fff");
+      grad.addColorStop(0.28, color);
+      grad.addColorStop(1, "#0f172a");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cx, by, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    function drawSimulation() {
+      const { w, h } = prepare(simCanvas, simCtx);
+      const ctx = simCtx;
+      const pal = theme();
+
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, pal.sky0);
+      sky.addColorStop(1, pal.sky1);
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      if (pal.stars) {
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        for (let i = 0; i < 50; i++) ctx.fillRect((i * 97) % w, (i * 53) % (h * 0.7), 1.4, 1.4);
+      }
+
+      const padL = 54, padR = 22, padT = 22, groundH = 48;
+      const usable = h - padT - groundH;
+      const viewH = 100;
+      const meterToY = (m) => padT + (1 - m / viewH) * usable;
+      const yToMeter = (py) => {
+        const m = (1 - (py - padT) / usable) * viewH;
+        return Math.min(100, Math.max(10, m));
+      };
+
+      const mid = (padL + w - padR) / 2;
+      const list = activeBodies();
+      const cx = list.length === 1 ? [mid] : [mid - 52, mid + 52];
+      layout = {
+        padL, padR, w, h, meterToY, yToMeter, cx: cx,
+        r: list.map((b) => visualRadius(b.mass))
+      };
+
+      const gy = meterToY(0);
+      ctx.fillStyle = pal.ground2;
+      ctx.fillRect(0, gy, w, h - gy);
+      ctx.fillStyle = pal.ground;
+      ctx.fillRect(0, gy, w, 8);
+
+      ctx.font = "12px Segoe UI";
+      ctx.textAlign = "right";
+      ctx.lineWidth = 1;
+      for (let m = 0; m <= 100; m += 10) {
+        const yy = meterToY(m);
+        ctx.strokeStyle = "rgba(148,176,214,0.22)";
+        ctx.beginPath(); ctx.moveTo(padL - 10, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
+        ctx.fillStyle = "rgba(238,243,251,0.85)";
+        ctx.fillText(m + " m", padL - 14, m === 0 ? yy - 6 : yy + 4);
+      }
+
+      const y0 = meterToY(state.h0);
+      ctx.setLineDash([7, 6]);
+      ctx.strokeStyle = "rgba(125,211,252,0.85)";
+      ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(w - padR, y0); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#7dd3fc";
+      ctx.textAlign = "left";
+      ctx.fillText("h₀ = " + fmt(state.h0, 0) + " m", padL + 8, y0 - 8);
+
+      list.forEach((b, i) => {
+        const r = layout.r[i];
+        const by = meterToY(b.y);
+        drawBall(ctx, cx[i], by, r, b.color);
+        ctx.fillStyle = b.color;
+        ctx.font = "12px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillText(b.mass + " kg", cx[i], gy + 22);
+      });
+
+      ctx.fillStyle = "rgba(7,11,18,0.62)";
+      ctx.fillRect(w - 188, 12, 172, 54);
+      ctx.fillStyle = state.air ? "#fb7185" : "#5eead4";
+      ctx.font = "bold 12px Segoe UI";
+      ctx.textAlign = "left";
+      ctx.fillText(state.air ? "HAVA DİRENCİ" : "VAKUM (havasız)", w - 178, 32);
+      ctx.fillStyle = "#eef3fb";
+      ctx.font = "12px Segoe UI";
+      ctx.fillText("t = " + fmt(state.t, 2) + " s", w - 178, 50);
+    }
+
+    function drawSchoolGraph(canvas, pick, yMax, yTitle, formula, large) {
+      const ctx = canvas.getContext("2d");
+      const { w, h } = prepare(canvas, ctx);
+      ctx.fillStyle = "#0a111c";
+      ctx.fillRect(0, 0, w, h);
+
+      const pad = large ? { l: 78, r: 28, t: 40, b: 52 } : { l: 48, r: 16, t: 22, b: 32 };
+      const tVac = vacuumFallTime();
+      const lastT = state.history.length ? state.history[state.history.length - 1].t : 0;
+      const tMax = Math.max(3.2, tVac * 1.15, lastT + 0.4);
+
+      const X = (t) => pad.l + (w - pad.l - pad.r) * (t / tMax);
+      const Y = (val) => pad.t + (h - pad.t - pad.b) * (1 - val / (yMax || 1));
+
+      const axisFont = large ? "20px Segoe UI" : "12px Segoe UI";
+      const labelFont = large ? "22px Segoe UI" : "13px Segoe UI";
+      const lineW = large ? 4 : 2.5;
+      const dotR = large ? 7 : 4;
+
+      ctx.font = axisFont;
+      ctx.fillStyle = "#c5d0e2";
+      ctx.strokeStyle = "rgba(180,200,230,0.16)";
+      ctx.lineWidth = large ? 1.4 : 1;
+      const yStep = yMax <= 10 ? 2 : (yMax <= 30 ? 5 : 10);
+      for (let val = 0; val <= yMax + 0.001; val += yStep) {
+        const yy = Y(val);
+        ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(w - pad.r, yy); ctx.stroke();
+        ctx.textAlign = "right";
+        ctx.fillText(String(Math.round(val)), pad.l - 8, yy + (large ? 7 : 4));
+      }
+      for (let t = 0; t <= tMax + 0.01; t += 1) {
+        const xx = X(t);
+        ctx.beginPath(); ctx.moveTo(xx, pad.t); ctx.lineTo(xx, h - pad.b); ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.fillText(String(t), xx, h - (large ? 18 : 12));
+      }
+
+      ctx.strokeStyle = "#e8eef8";
+      ctx.fillStyle = "#e8eef8";
+      ctx.lineWidth = large ? 3 : 2;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, pad.t);
+      ctx.lineTo(pad.l, h - pad.b);
+      ctx.lineTo(w - pad.r, h - pad.b);
+      ctx.stroke();
+
+      ctx.font = labelFont;
+      ctx.textAlign = "center";
+      ctx.fillText("t (s)", w / 2, h - (large ? 4 : 2));
+      ctx.save();
+      ctx.translate(large ? 22 : 13, (pad.t + h - pad.b) / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(yTitle, 0, 0);
+      ctx.restore();
+
+      const series = [
+        { color: C1, key: "a", label: "Cisim 1" }
+      ];
+      if (state.dual) series.push({ color: C2, key: "b", label: "Cisim 2" });
+      series.forEach((s) => {
+        if (!state.history.length) return;
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = lineW;
+        if (state.history.length >= 2) {
+          ctx.beginPath();
+          state.history.forEach((p, i) => {
+            const xx = X(p.t);
+            const yy = Y(pick(p[s.key]));
+            if (i === 0) ctx.moveTo(xx, yy);
+            else ctx.lineTo(xx, yy);
+          });
+          ctx.stroke();
+        }
+        const last = state.history[state.history.length - 1];
+        const px = X(last.t);
+        const py = Y(pick(last[s.key]));
+        // Anlık noktadan X ve Y eksenlerine kesikli yansıtma
+        ctx.setLineDash([5, 5]);
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = large ? 1.8 : 1.15;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, py);
+        ctx.lineTo(px, py);
+        ctx.moveTo(px, py);
+        ctx.lineTo(px, h - pad.b);
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(px, py, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.font = large ? "16px Segoe UI" : "11px Segoe UI";
+      ctx.textAlign = "left";
+      ctx.fillStyle = C1;
+      ctx.fillText("● Cisim 1", pad.l + 8, pad.t - 6);
+      if (state.dual) {
+        ctx.fillStyle = C2;
+        ctx.fillText("● Cisim 2", pad.l + (large ? 120 : 86), pad.t - 6);
+      }
+    }
+
+    function niceMax(v) {
+      const steps = [5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 150];
+      for (let i = 0; i < steps.length; i++) if (v <= steps[i]) return steps[i];
+      return Math.ceil(v / 10) * 10;
+    }
+
+    function graphSpecs() {
+      const tVac = vacuumFallTime();
+      const vmaxHist = state.history.reduce((m, p) => Math.max(m, p.a.v, state.dual ? p.b.v : 0), 0);
+      return {
+        xt: { pick: (s) => s.x, yMax: niceMax(Math.max(state.h0, 10)), yTitle: "x (m)", title: "Konum-Zaman (x-t)", sub: "alınan yol" },
+        vt: { pick: (s) => s.v, yMax: niceMax(Math.max(state.g * tVac, vmaxHist, 10)), yTitle: "v (m/s)", title: "Hız-Zaman (v-t)", sub: state.dual ? "iki cisim" : "tek cisim" },
+        at: { pick: (s) => s.a, yMax: niceMax(Math.max(state.g * 1.5, 5)), yTitle: "a (m/s²)", title: "İvme-Zaman (a-t)", sub: state.air ? "a = g − sürtünme/m" : "a = g" }
+      };
+    }
+
+    function drawGraphs() {
+      const specs = graphSpecs();
+      ["xt", "vt", "at"].forEach((key, i) => {
+        const canvases = [xtCanvas, vtCanvas, atCanvas];
+        const s = specs[key];
+        drawSchoolGraph(canvases[i], s.pick, s.yMax, s.yTitle, s.sub, false);
+      });
+      if (state.modalGraph && specs[state.modalGraph]) {
+        const s = specs[state.modalGraph];
+        drawSchoolGraph(modalCanvas, s.pick, s.yMax, s.yTitle, s.sub, true);
+      }
+    }
+
+    function pointerToLocal(ev) {
+      const rect = simCanvas.getBoundingClientRect();
+      return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    }
+
+    function ballHit(p) {
+      if (!layout) return false;
+      return activeBodies().some((b, i) => {
+        const dx = p.x - layout.cx[i];
+        const dy = p.y - layout.meterToY(b.y);
+        const r = layout.r[i] + 12;
+        return dx * dx + dy * dy <= r * r;
+      });
+    }
+
+    function applyHeight(h) {
+      state.h0 = Math.round(h);
+      heightSlider.value = String(state.h0);
+      resetSim(true);
+      setStatus("Yükseklik ayarlandı", "");
+    }
+
+    function setAir(on) {
+      state.air = on;
+      document.getElementById("btnVacuum").className = on ? "" : "active-vac";
+      document.getElementById("btnAir").className = on ? "active-air" : "";
+      envHint.textContent = on
+        ? (state.dual
+          ? "Hava: a = g − (½ ρ v² Cd A)/m  ·  hafif cisim geride kalır."
+          : "Hava: a = g − (½ ρ v² Cd A)/m  ·  kütle ivmeyi etkiler.")
+        : (state.dual
+          ? "Vakum: a = g · her iki cisim aynı anda yere varır."
+          : "Vakum: a = g · kütle hareketi değiştirmez.");
+      resetSim(true);
+      setStatus(on ? "Hava direnci açık" : "Vakum (havasız)", "");
+    }
+
+    simCanvas.addEventListener("pointerdown", (ev) => {
+      const p = pointerToLocal(ev);
+      if (!ballHit(p)) return;
+      state.dragging = true;
+      simCanvas.classList.add("grabbing");
+      simCanvas.setPointerCapture(ev.pointerId);
+      applyHeight(layout.yToMeter(p.y));
+    });
+    simCanvas.addEventListener("pointermove", (ev) => {
+      if (!state.dragging || !layout) return;
+      applyHeight(layout.yToMeter(pointerToLocal(ev).y));
+    });
+    function endDrag(ev) {
+      if (!state.dragging) return;
+      state.dragging = false;
+      simCanvas.classList.remove("grabbing");
+      if (ev && simCanvas.hasPointerCapture(ev.pointerId)) simCanvas.releasePointerCapture(ev.pointerId);
+    }
+    simCanvas.addEventListener("pointerup", endDrag);
+    simCanvas.addEventListener("pointercancel", endDrag);
+
+    heightSlider.addEventListener("input", () => applyHeight(Number(heightSlider.value)));
+    gSlider.addEventListener("input", () => {
+      state.g = Number(gSlider.value);
+      planetBtns.forEach((b) => b.classList.toggle("active", Number(b.dataset.g) === state.g));
+      if (Math.abs(state.g - 10) > 0.05 && Math.abs(state.g - 1.6) > 0.05 && Math.abs(state.g - 3.7) > 0.05) {
+        planetBtns.forEach((b) => b.classList.remove("active"));
+      }
+      resetSim(true);
+      updateHud();
+    });
+    m1Slider.addEventListener("input", () => {
+      state.bodies[0].mass = Number(m1Slider.value);
+      resetSim(true);
+    });
+    m2Slider.addEventListener("input", () => {
+      state.bodies[1].mass = Number(m2Slider.value);
+      resetSim(true);
+    });
+
+    planetBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        planetBtns.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.g = Number(btn.dataset.g);
+        state.planet = btn.dataset.planet;
+        gSlider.value = String(state.g);
+        resetSim(true);
+      });
+    });
+
+    document.getElementById("btnVacuum").addEventListener("click", () => setAir(false));
+    document.getElementById("btnAir").addEventListener("click", () => setAir(true));
+
+    function setDual(on) {
+      state.dual = on;
+      document.querySelector(".app").classList.toggle("dual", on);
+      const btn = document.getElementById("btnDual");
+      btn.textContent = on ? "Cisim 2'yi kaldır" : "Cisim 2 ekle";
+      btn.classList.toggle("on", on);
+      document.querySelectorAll(".graph-card h3 span").forEach((s) => {
+        s.textContent = on ? "iki cisim" : "tek cisim";
+      });
+      setAir(state.air);
+      setStatus("Hazır", "");
+    }
+    document.getElementById("btnDual").addEventListener("click", () => setDual(!state.dual));
+
+    document.getElementById("btnStart").addEventListener("click", () => {
+      if (state.finished) resetSim();
+      hideSolution();
+      state.running = true;
+      setStatus("Çalışıyor", "run");
+    });
+    document.getElementById("btnPause").addEventListener("click", () => {
+      if (!state.running) return;
+      pauseNow("Duraklatıldı", "pause");
+    });
+    document.getElementById("btnReset").addEventListener("click", () => resetSim());
+
+    quickBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sec = Number(btn.dataset.stop);
+        resetSim(true);
+        state.targetT = sec;
+        state.running = true;
+        quickBtns.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        hideSolution();
+        setStatus(sec + ". saniyeye gidiliyor", "run");
+      });
+    });
+
+    function applyPanelWidth(px) {
+      const rect = document.querySelector(".main").getBoundingClientRect();
+      const minW = 280;
+      const maxW = Math.max(minW, Math.min(rect.width * 0.72, rect.width - 260));
+      sidePanel.style.setProperty("--panel-w", Math.round(Math.max(minW, Math.min(maxW, px))) + "px");
+    }
+    resizer.addEventListener("pointerdown", (ev) => {
+      state.resizing = true;
+      document.body.classList.add("resizing");
+      resizer.setPointerCapture(ev.pointerId);
+    });
+    resizer.addEventListener("pointermove", (ev) => {
+      if (!state.resizing) return;
+      applyPanelWidth(document.querySelector(".main").getBoundingClientRect().right - ev.clientX);
+    });
+    function endResize(ev) {
+      if (!state.resizing) return;
+      state.resizing = false;
+      document.body.classList.remove("resizing");
+      if (ev && resizer.hasPointerCapture(ev.pointerId)) resizer.releasePointerCapture(ev.pointerId);
+    }
+    resizer.addEventListener("pointerup", endResize);
+    resizer.addEventListener("pointercancel", endResize);
+
+    function openGraphModal(key) {
+      const s = graphSpecs()[key];
+      if (!s) return;
+      state.modalGraph = key;
+      modalTitle.innerHTML = s.title + " <span>" + s.sub + "</span>";
+      graphModal.classList.add("open");
+      graphModal.setAttribute("aria-hidden", "false");
+    }
+    function closeGraphModal() {
+      state.modalGraph = null;
+      graphModal.classList.remove("open");
+      graphModal.setAttribute("aria-hidden", "true");
+    }
+    document.querySelectorAll(".graph-card").forEach((card) => {
+      card.addEventListener("click", () => openGraphModal(card.dataset.graph));
+    });
+    modalClose.addEventListener("click", closeGraphModal);
+    modalBackdrop.addEventListener("click", closeGraphModal);
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && state.modalGraph) closeGraphModal();
+    });
+
+    function loop(ts) {
+      if (!lastTs) lastTs = ts;
+      let dt = (ts - lastTs) / 1000;
+      lastTs = ts;
+      if (dt > 0.05) dt = 0.05;
+      stepPhysics(dt);
+      drawSimulation();
+      drawGraphs();
+      requestAnimationFrame(loop);
+    }
+
+    resetSim();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
